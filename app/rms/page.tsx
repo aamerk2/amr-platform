@@ -23,6 +23,32 @@ const CELL_META: Record<string, { color: string; border: string; label: string }
   conveyor: { color: "#160800", border: "#cc4400", label: "Conveyor" },
 }
 
+interface Task {
+  id: string
+  type: string
+  status: string
+  priority: string
+  sku: string
+  weight: number
+  assignedTo: string | null
+  from?: number[]
+  wcsRule?: string
+  taskId?: string
+}
+
+interface AMR {
+  id: string
+  color: string
+  status: string
+  battery: number
+  pos: number[]
+  taskId: string | null
+  completedTasks: number
+  totalDist: number
+  model: string
+  maxPayload: number
+}
+
 function buildGrid() {
   return Array.from({ length: GH }, (_, r) =>
     Array.from({ length: GW }, (_, c) => {
@@ -37,7 +63,6 @@ function buildGrid() {
   )
 }
 
-// Professional SVG Robot Icon
 function RobotIcon({ color = "#00e5ff", size = 20 }: { color?: string; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -61,7 +86,7 @@ function RobotIcon({ color = "#00e5ff", size = 20 }: { color?: string; size?: nu
 }
 
 let _amrId = 1
-function makeAMR(index: number) {
+function makeAMR(index: number): AMR {
   const positions = [[1,2],[1,7],[1,12],[1,17],[2,2],[2,7]]
   const pos = positions[index % positions.length]
   return {
@@ -70,7 +95,7 @@ function makeAMR(index: number) {
     status: "IDLE",
     battery: 70 + Math.random() * 30,
     pos: [...pos],
-    taskId: null as string | null,
+    taskId: null,
     completedTasks: 0,
     totalDist: 0,
     model: ["MiR100","Geek+ P800","Fetch Cart","GreyOrange"][index % 4],
@@ -81,7 +106,7 @@ function makeAMR(index: number) {
 export default function RMSPage() {
   const { tasks, processRMS, completeTask, addLog } = useStore()
   const [grid] = useState(buildGrid)
-  const [amrs, setAmrs] = useState(() => Array.from({ length: 4 }, (_, i) => makeAMR(i)))
+  const [amrs, setAmrs] = useState<AMR[]>(() => Array.from({ length: 4 }, (_, i) => makeAMR(i)))
   const [running, setRunning] = useState(false)
   const [fleetSize, setFleetSize] = useState(4)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -94,7 +119,7 @@ export default function RMSPage() {
     if (!running) { if (tickRef.current) clearInterval(tickRef.current); return }
     tickRef.current = setInterval(() => {
       processRMS(amrs, setAmrs)
-      setAmrs(prev => prev.map(amr => {
+      setAmrs(prev => prev.map((amr: AMR) => {
         let { battery, status, completedTasks, pos, taskId, totalDist } = amr
         battery = Math.max(0, battery - 0.2)
         if (battery < 10 && status !== "CHARGING") {
@@ -127,10 +152,10 @@ export default function RMSPage() {
   }, [running, amrs, processRMS, completeTask, addLog])
 
   const stats = {
-    idle:     amrs.filter(a => a.status === "IDLE").length,
-    active:   amrs.filter(a => a.status === "EN_ROUTE" || a.status === "WORKING").length,
-    charging: amrs.filter(a => a.status === "CHARGING").length,
-    avgBatt:  Math.round(amrs.reduce((s, a) => s + a.battery, 0) / amrs.length),
+    idle:     amrs.filter((a: AMR) => a.status === "IDLE").length,
+    active:   amrs.filter((a: AMR) => a.status === "EN_ROUTE" || a.status === "WORKING").length,
+    charging: amrs.filter((a: AMR) => a.status === "CHARGING").length,
+    avgBatt:  Math.round(amrs.reduce((s: number, a: AMR) => s + a.battery, 0) / amrs.length),
   }
 
   const cs = 28
@@ -178,8 +203,8 @@ export default function RMSPage() {
           { label: "AMRs Active",  value: stats.active,   color: "#00e5ff" },
           { label: "Charging",     value: stats.charging, color: "#9c4dcc" },
           { label: "Avg Battery",  value: `${stats.avgBatt}%`, color: stats.avgBatt > 40 ? "#69ff47" : "#ff3d3d" },
-          { label: "Tasks Queued", value: tasks.filter(t => t.status === "WCS_DISPATCHED").length, color: "#ffb300" },
-          { label: "Tasks Done",   value: tasks.filter(t => t.status === "DONE").length, color: "#69ff47" },
+          { label: "Tasks Queued", value: tasks.filter((t: Task) => t.status === "WCS_DISPATCHED").length, color: "#ffb300" },
+          { label: "Tasks Done",   value: tasks.filter((t: Task) => t.status === "DONE").length, color: "#69ff47" },
         ].map(k => (
           <div key={k.label} style={{
             background: "rgba(0,0,0,0.3)",
@@ -218,8 +243,8 @@ export default function RMSPage() {
             }}>
               {grid.map((row, r) => row.map((cell, c) => {
                 const meta = CELL_META[cell]
-                const amr = amrs.find(a => a.pos[0] === r && a.pos[1] === c)
-                const hasTask = tasks.some(t =>
+                const amr = amrs.find((a: AMR) => a.pos[0] === r && a.pos[1] === c)
+                const hasTask = tasks.some((t: Task) =>
                   (t.status === "ASSIGNED" || t.status === "WCS_DISPATCHED") &&
                   JSON.stringify(t.from) === JSON.stringify([r, c])
                 )
@@ -292,7 +317,7 @@ export default function RMSPage() {
                   No tasks yet — go to WMS to inject orders
                 </div>
               )}
-              {[...tasks].reverse().slice(0, 40).map(t => {
+              {[...tasks].reverse().slice(0, 40).map((t: Task) => {
                 const sc: Record<string, string> = {
                   WMS_QUEUED: "#00e5ff",
                   WCS_DISPATCHED: "#ffb300",
@@ -369,7 +394,7 @@ export default function RMSPage() {
           </div>
 
           {/* AMR Cards */}
-          {amrs.map(amr => {
+          {amrs.map((amr: AMR) => {
             const sc: Record<string, string> = {
               IDLE: "#69ff47",
               EN_ROUTE: "#00e5ff",
@@ -378,7 +403,7 @@ export default function RMSPage() {
             }
             const statusColor = sc[amr.status] || "#fff"
             const battColor = amr.battery > 50 ? "#69ff47" : amr.battery > 20 ? "#ffb300" : "#ff3d3d"
-            const activeTask = tasks.find(t => t.id === amr.taskId)
+            const activeTask = tasks.find((t: Task) => t.id === amr.taskId)
 
             return (
               <div key={amr.id} style={{
@@ -389,7 +414,6 @@ export default function RMSPage() {
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    {/* Professional robot icon */}
                     <div style={{
                       width: 38, height: 38,
                       background: `${amr.color}12`,
@@ -401,7 +425,7 @@ export default function RMSPage() {
                     </div>
                     <div>
                       <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: amr.color }}>{amr.id}</div>
-                      <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: 0.5 }}>{amr.model}</div>
+                      <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: "rgba(255,255,255,0.3)" }}>{amr.model}</div>
                     </div>
                   </div>
                   <span style={{
