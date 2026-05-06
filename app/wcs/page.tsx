@@ -1,11 +1,27 @@
 "use client"
-import { useStore } from "../../lib/store"
+import { useStore } from "@/lib/store"
 
 const PRI_COL: Record<string, string> = {
   CRITICAL: "#ff3d3d",
   HIGH: "#ff8c00",
   MEDIUM: "#ffd600",
   LOW: "#78909c",
+}
+
+interface Task {
+  id: string
+  status: string
+  priority: string
+  sku: string
+  wcsProcessed: boolean
+  wcsRule?: string
+}
+
+interface WCSRule {
+  id: string
+  name: string
+  desc: string
+  active: boolean
 }
 
 export default function WCSPage() {
@@ -59,7 +75,7 @@ export default function WCSPage() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {wcsRules.map(rule => (
+            {wcsRules.map((rule: WCSRule) => (
               <div key={rule.id} style={{
                 background: "rgba(0,0,0,0.3)",
                 border: `1px solid ${rule.active ? "rgba(255,179,0,0.25)" : "rgba(255,255,255,0.06)"}`,
@@ -113,7 +129,7 @@ export default function WCSPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
             {pipeline.map(s => {
-              const count = tasks.filter(t => t.status === s.status).length
+              const count = tasks.filter((t: Task) => t.status === s.status).length
               const pct = tasks.length ? (count / tasks.length) * 100 : 0
               return (
                 <div key={s.status}>
@@ -142,12 +158,12 @@ export default function WCSPage() {
             Recent Dispatches
           </div>
           <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-            {tasks.filter(t => t.wcsProcessed).length === 0 && (
+            {tasks.filter((t: Task) => t.wcsProcessed).length === 0 && (
               <div style={{ color: "rgba(255,255,255,0.2)", fontStyle: "italic", fontSize: 12, textAlign: "center", padding: 20 }}>
                 No dispatches yet — click PROCESS TASKS above
               </div>
             )}
-            {tasks.filter(t => t.wcsProcessed).slice(0, 20).map(t => (
+            {tasks.filter((t: Task) => t.wcsProcessed).slice(0, 20).map((t: Task) => (
               <div key={t.id} style={{
                 display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
                 padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)",

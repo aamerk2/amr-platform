@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
-import { useStore } from "../../lib/store"
+import { useStore } from "@/lib/store"
 
 const GW = 22, GH = 14
 const AMR_COLS = ["#00e5ff","#ffb300","#69ff47","#ff4081","#e040fb","#ff6d00"]

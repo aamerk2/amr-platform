@@ -1,145 +1,152 @@
 "use client"
-import { useStore } from "../../lib/store"
+import { useStore } from "@/lib/store"
 
-const PRI_COL: Record<string, string> = {
-  CRITICAL: "#ff3d3d",
-  HIGH: "#ff8c00",
-  MEDIUM: "#ffd600",
-  LOW: "#78909c",
+interface Task {
+  status: string
 }
 
-export default function WMSPage() {
-  const { orders, tasks, injectOrder, injectBatch } = useStore()
+interface Log {
+  t: string
+  color: string
+  layer: string
+  msg: string
+}
+
+interface Order {
+  id: string
+}
+
+export default function Overview() {
+  const { orders, tasks, logs } = useStore()
 
   const stats = {
-    total:    orders.length,
-    critical: orders.filter(o => o.priority === "CRITICAL").length,
-    high:     orders.filter(o => o.priority === "HIGH").length,
-    medium:   orders.filter(o => o.priority === "MEDIUM").length,
-    low:      orders.filter(o => o.priority === "LOW").length,
+    orders:     (orders as Order[]).length,
+    queued:     tasks.filter((t: Task) => t.status === "WMS_QUEUED").length,
+    dispatched: tasks.filter((t: Task) => t.status === "WCS_DISPATCHED").length,
+    assigned:   tasks.filter((t: Task) => t.status === "ASSIGNED").length,
+    done:       tasks.filter((t: Task) => t.status === "DONE").length,
   }
+
+  const boxes = [
+    { label: "Total Orders",    value: stats.orders,     color: "#00e5ff", icon: "📥", sub: "in WMS" },
+    { label: "WMS Queued",      value: stats.queued,     color: "#00bcd4", icon: "⏳", sub: "awaiting WCS" },
+    { label: "WCS Dispatched",  value: stats.dispatched, color: "#ffb300", icon: "⚙️", sub: "routed to RMS" },
+    { label: "Assigned to AMR", value: stats.assigned,   color: "#e040fb", icon: "🤖", sub: "en route" },
+    { label: "Completed",       value: stats.done,       color: "#69ff47", icon: "✅", sub: "tasks done" },
+  ]
 
   return (
     <div style={{ padding: "32px 28px", maxWidth: 1200, margin: "0 auto" }}>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <div style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: "#00e5ff", letterSpacing: 3, textTransform: "uppercase", marginBottom: 4 }}>
-            LAYER 1
-          </div>
-          <h1 style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, margin: 0, color: "#fff" }}>
-            Warehouse Management System
-          </h1>
-          <p style={{ color: "rgba(255,255,255,0.35)", marginTop: 6, fontSize: 13, fontStyle: "italic", margin: "6px 0 0" }}>
-            Receives customer orders · Generates pick tasks · Passes to WCS for routing
-          </p>
+      <div style={{ marginBottom: 32 }}>
+        <div style={{
+          fontFamily: "'Courier New', monospace",
+          fontSize: 10, color: "rgba(255,255,255,0.3)",
+          letterSpacing: 3, textTransform: "uppercase" as const, marginBottom: 6,
+        }}>
+          End-to-End Warehouse Automation
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={injectOrder} style={{
-            padding: "10px 22px",
-            background: "rgba(0,229,255,0.1)",
-            border: "1px solid #00e5ff",
-            borderRadius: 8, color: "#00e5ff",
-            fontFamily: "'Courier New', monospace",
-            fontSize: 12, letterSpacing: 1, cursor: "pointer",
-          }}>
-            ＋ INJECT ORDER
-          </button>
-          <button onClick={() => injectBatch(5)} style={{
-            padding: "10px 22px",
-            background: "rgba(255,179,0,0.1)",
-            border: "1px solid #ffb300",
-            borderRadius: 8, color: "#ffb300",
-            fontFamily: "'Courier New', monospace",
-            fontSize: 12, letterSpacing: 1, cursor: "pointer",
-          }}>
-            ⚡ BATCH ×5
-          </button>
-        </div>
+        <h1 style={{ fontFamily: "monospace", fontSize: 32, fontWeight: 700, margin: 0, color: "#fff" }}>
+          Operations Overview
+        </h1>
+        <p style={{ color: "rgba(255,255,255,0.35)", marginTop: 8, fontSize: 14, fontStyle: "italic" }}>
+          Live data flowing through WMS → WCS/WES → RMS → AMRs
+        </p>
       </div>
 
-      {/* KPI Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 24 }}>
+      {/* Flow diagram */}
+      <div style={{
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.07)",
+        borderRadius: 14, padding: 24, marginBottom: 24,
+        display: "flex", alignItems: "center",
+        justifyContent: "center", gap: 8, flexWrap: "wrap" as const,
+      }}>
         {[
-          { label: "Total Orders", value: stats.total,    color: "#00e5ff" },
-          { label: "Critical",     value: stats.critical, color: "#ff3d3d" },
-          { label: "High",         value: stats.high,     color: "#ff8c00" },
-          { label: "Medium",       value: stats.medium,   color: "#ffd600" },
-          { label: "Low",          value: stats.low,      color: "#78909c" },
-        ].map(k => (
-          <div key={k.label} style={{
-            background: "rgba(0,0,0,0.3)",
-            border: `1px solid ${k.color}25`,
-            borderRadius: 12, padding: "16px 18px",
-          }}>
-            <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>
-              {k.label}
+          { label: "WMS",     color: "#00e5ff", icon: "📥", sub: "Order Intake" },
+          { label: "WCS/WES", color: "#ffb300", icon: "⚙️", sub: "Rules Engine" },
+          { label: "RMS",     color: "#e040fb", icon: "🤖", sub: "Robot Control" },
+          { label: "AMRs",    color: "#69ff47", icon: "🚗", sub: "Execution" },
+        ].map((b, i) => (
+          <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{
+              background: `${b.color}10`,
+              border: `1px solid ${b.color}40`,
+              borderRadius: 12, padding: "16px 24px",
+              textAlign: "center" as const, minWidth: 120,
+            }}>
+              <div style={{ fontSize: 28, marginBottom: 6 }}>{b.icon}</div>
+              <div style={{ fontFamily: "monospace", fontSize: 16, fontWeight: 700, color: b.color }}>{b.label}</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 4, fontStyle: "italic" }}>{b.sub}</div>
             </div>
-            <div style={{ fontFamily: "monospace", fontSize: 26, fontWeight: 700, color: k.color }}>
-              {k.value}
-            </div>
+            {i < 3 && (
+              <div style={{ fontSize: 20, color: "rgba(255,255,255,0.2)", fontWeight: 700 }}>→</div>
+            )}
           </div>
         ))}
       </div>
 
-      {/* Orders List */}
+      {/* KPI boxes */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: 12, marginBottom: 24,
+      }}>
+        {boxes.map(b => (
+          <div key={b.label} style={{
+            background: "rgba(0,0,0,0.3)",
+            border: `1px solid ${b.color}25`,
+            borderRadius: 12, padding: "18px 20px",
+          }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>{b.icon}</div>
+            <div style={{
+              fontFamily: "'Courier New', monospace", fontSize: 9,
+              color: "rgba(255,255,255,0.3)", letterSpacing: 2,
+              textTransform: "uppercase" as const, marginBottom: 6,
+            }}>{b.label}</div>
+            <div style={{ fontFamily: "monospace", fontSize: 28, fontWeight: 700, color: b.color }}>{b.value}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 4, fontStyle: "italic" }}>{b.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Event log */}
       <div style={{
         background: "rgba(255,255,255,0.02)",
         border: "1px solid rgba(255,255,255,0.07)",
         borderRadius: 14, padding: 20,
       }}>
-        <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: "#00e5ff", letterSpacing: 3, textTransform: "uppercase", marginBottom: 14 }}>
-          Order Queue
-        </div>
-
-        {orders.length === 0 && (
-          <div style={{ textAlign: "center", padding: 60, color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>
-            No orders yet — click INJECT ORDER or BATCH ×5 above
-          </div>
-        )}
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 500, overflowY: "auto" }}>
-          {orders.map(o => (
-            <div key={o.id} style={{
-              background: "rgba(0,0,0,0.25)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderLeft: `3px solid ${PRI_COL[o.priority]}`,
-              borderRadius: 8, padding: "12px 16px",
-              display: "flex", alignItems: "center",
-              gap: 16, flexWrap: "wrap",
+        <div style={{
+          fontFamily: "'Courier New', monospace", fontSize: 9,
+          color: "rgba(255,255,255,0.3)", letterSpacing: 3,
+          textTransform: "uppercase" as const, marginBottom: 12,
+        }}>Live Event Stream</div>
+        <div style={{ maxHeight: 280, overflowY: "auto" as const, display: "flex", flexDirection: "column" as const, gap: 6 }}>
+          {logs.length === 0 && (
+            <div style={{
+              textAlign: "center" as const, padding: 40,
+              color: "rgba(255,255,255,0.2)", fontStyle: "italic", fontSize: 13,
             }}>
-              <span style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: "rgba(255,255,255,0.35)", flexShrink: 0 }}>
-                {o.id}
-              </span>
-              <span style={{ fontFamily: "monospace", fontSize: 13, color: "#fff", fontWeight: 700, flex: 1 }}>
-                {o.customer}
-              </span>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {o.items.slice(0, 3).map((item, i) => (
-                  <span key={i} style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.05)", borderRadius: 4, padding: "2px 8px" }}>
-                    {item.sku} ×{item.qty}
-                  </span>
-                ))}
-                {o.items.length > 3 && (
-                  <span style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: "rgba(255,255,255,0.2)" }}>
-                    +{o.items.length - 3} more
-                  </span>
-                )}
-              </div>
+              Go to WMS page and inject orders to see live events here
+            </div>
+          )}
+          {(logs as Log[]).map((l: Log, i: number) => (
+            <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
               <span style={{
-                background: `${PRI_COL[o.priority]}18`,
-                border: `1px solid ${PRI_COL[o.priority]}45`,
-                borderRadius: 4, padding: "2px 10px",
                 fontFamily: "'Courier New', monospace",
-                fontSize: 10, color: PRI_COL[o.priority],
-                textTransform: "uppercase", flexShrink: 0,
-              }}>
-                {o.priority}
-              </span>
-              <span style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: "rgba(255,255,255,0.3)", flexShrink: 0 }}>
-                {o.items.length} lines
-              </span>
+                fontSize: 9, color: "rgba(255,255,255,0.2)", flexShrink: 0,
+              }}>{l.t}</span>
+              <span style={{
+                background: `${l.color}18`, border: `1px solid ${l.color}40`,
+                borderRadius: 3, padding: "0 6px",
+                fontFamily: "'Courier New', monospace",
+                fontSize: 9, color: l.color, flexShrink: 0,
+              }}>{l.layer}</span>
+              <span style={{
+                fontFamily: "'Courier New', monospace",
+                fontSize: 11, color: "rgba(255,255,255,0.6)",
+              }}>{l.msg}</span>
             </div>
           ))}
         </div>
