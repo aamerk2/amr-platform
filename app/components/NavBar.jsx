@@ -1,8 +1,8 @@
 "use client"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 
 export default function NavBar() {
+  const router = useRouter()
   const path = usePathname()
 
   const links = [
@@ -25,12 +25,16 @@ export default function NavBar() {
       zIndex: 200,
     }}>
       {/* Logo */}
-      <div style={{
-        paddingRight: 28,
-        marginRight: 28,
-        borderRight: "1px solid rgba(255,255,255,0.07)",
-        flexShrink: 0,
-      }}>
+      <div
+        onClick={() => router.push("/")}
+        style={{
+          paddingRight: 28,
+          marginRight: 28,
+          borderRight: "1px solid rgba(255,255,255,0.07)",
+          flexShrink: 0,
+          cursor: "pointer",
+        }}
+      >
         <div style={{
           fontFamily: "'Courier New', monospace",
           fontSize: 9,
@@ -53,20 +57,26 @@ export default function NavBar() {
 
       {/* Links */}
       {links.map(l => (
-        <Link key={l.href} href={l.href} style={{
-          textDecoration: "none",
-          borderBottom: `2px solid ${path === l.href ? "#00e5ff" : "transparent"}`,
-          color: path === l.href ? "#00e5ff" : "rgba(255,255,255,0.4)",
-          fontFamily: "'Courier New', monospace",
-          fontSize: 11,
-          letterSpacing: 1.5,
-          textTransform: "uppercase",
-          padding: "20px 16px",
-          transition: "all 0.2s",
-          whiteSpace: "nowrap",
-        }}>
+        <button
+          key={l.href}
+          onClick={() => router.push(l.href)}
+          style={{
+            background: "none",
+            border: "none",
+            borderBottom: `2px solid ${path === l.href ? "#00e5ff" : "transparent"}`,
+            color: path === l.href ? "#00e5ff" : "rgba(255,255,255,0.4)",
+            fontFamily: "'Courier New', monospace",
+            fontSize: 11,
+            letterSpacing: 1.5,
+            textTransform: "uppercase",
+            padding: "20px 16px",
+            transition: "all 0.2s",
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+          }}
+        >
           {l.label}
-        </Link>
+        </button>
       ))}
     </nav>
   )
