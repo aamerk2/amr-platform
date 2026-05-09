@@ -249,7 +249,7 @@ export default function RMSPage() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 0, height: "calc(100vh - 160px)" }}>
 
         {/* ── MAIN MAP ── */}
-        <div style={{ padding: 20, overflowAuto: "both", overflow: "auto" }}>
+        <div style={{ padding: 20, overflow: "auto" }}>
 
           {/* Legend */}
           <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
