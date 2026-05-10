@@ -195,7 +195,72 @@ export default function RMSPage() {
       return
     }
     tickRef.current = setInterval(() => {
-      setAmrs(prev => prev.map(amr => {
+
+      // Step 1: auto-process WMS→WCS→RMS pipeline
+      const storeTasks = useStore.getState().tasks
+      const storeCompleteTask = useStore.getState().completeTask
+      const storeAddLog = useStore.getState().addLog
+
+      // Auto WCS: move WMS_QUEUED → WCS_DISPATCHED
+      const needsWCS = storeTasks.filter((t: Task) => t.status === "WMS_QUEUED")
+      if (needsWCS.length > 0) {
+        useStore.setState(s => ({
+          tasks: s.tasks.map((t: Task) =>
+            t.status === "WMS_QUEUED"
+              ? { ...t, status: "WCS_DISPATCHED", wcsProcessed: true, wcsRule: "Auto Route" }
+              : t
+          )
+        }))
+      }
+
+      // Step 2: assign WCS_DISPATCHED tasks to idle AMRs
+      setAmrs(prev => {
+        const currentTasks = useStore.getState().tasks
+        const dispatched = currentTasks.filter((t: Task) => t.status === "WCS_DISPATCHED")
+        const taskUpdates: Record<string, Task> = {}
+        const amrUpdates: Record<string, Partial<AMR>> = {}
+        const usedAmrs = new Set<string>()
+        const idleAmrs = prev.filter(a => a.status === "IDLE" && a.battery > 12)
+
+        for (const task of dispatched) {
+          const available = idleAmrs.filter(a => !usedAmrs.has(a.id))
+          if (!available.length) break
+          const amr = available[0]
+          usedAmrs.add(amr.id)
+          taskUpdates[task.id] = { ...task, status: "ASSIGNED", assignedTo: amr.id }
+          amrUpdates[amr.id] = { status: "EN_ROUTE", taskId: task.id }
+          storeAddLog(`RMS → ${task.id} ⟶ ${amr.id}`, "#e040fb", "RMS")
+        }
+
+        if (Object.keys(taskUpdates).length > 0) {
+          useStore.setState(s => ({
+            tasks: s.tasks.map((t: Task) => taskUpdates[t.id] || t)
+          }))
+        }
+
+        return prev.map(a => amrUpdates[a.id] ? { ...a, ...amrUpdates[a.id] } : a)
+      })
+
+      // Step 3: move AMRs and complete tasks
+      setAmrs(prev => prev.map((amr: AMR) => {
+        const moved = moveAMR(amr)
+
+        // randomly complete assigned tasks as robot moves
+        if (amr.taskId && amr.status === "EN_ROUTE" && Math.random() < 0.06) {
+          storeCompleteTask(amr.taskId)
+          storeAddLog(`✓ ${amr.id} completed ${amr.taskId}`, "#10b981", "AMR")
+          return { ...moved, status: "IDLE", taskId: null, completedTasks: amr.completedTasks + 1 }
+        }
+
+        if (moved.completedTasks > amr.completedTasks && amr.taskId) {
+          storeCompleteTask(amr.taskId)
+        }
+        return moved
+      }))
+
+    }, 400)
+    return () => { if (tickRef.current) clearInterval(tickRef.current) }
+  }, [running, completeTask, addLog])
         const moved = moveAMR(amr)
         if (moved.completedTasks > amr.completedTasks) {
           if (amr.taskId) completeTask(amr.taskId)
