@@ -40,6 +40,10 @@ interface Task {
   weight: number
   assignedTo: string | null
   from?: number[]
+  orderId?: string
+  wcsProcessed?: boolean
+  wcsRule?: string
+  completedAt?: number | null
 }
 
 function RobotIcon({ color = "#3b82f6", size = 16 }: { color?: string; size?: number }) {
@@ -71,32 +75,29 @@ function getCellType(row: number, col: number) {
 let _aid = 1
 function spawnAMR(index: number): AMR {
   const startCol = AISLE_COLS[index % AISLE_COLS.length]
-  const startRow = 0
   return {
     id: `AMR-${String(_aid++).padStart(3, "0")}`,
     color: AMR_COLORS[index % AMR_COLORS.length],
     status: "IDLE",
     battery: 75 + Math.random() * 25,
-    row: startRow,
+    row: 0,
     col: startCol,
     taskId: null,
     completedTasks: 0,
     totalDist: 0,
     model: ["MiR100","Geek+ P800","Fetch Cart","GreyOrange"][index % 4],
     maxPayload: 200 + Math.floor(Math.random() * 300),
-    targetRow: Math.floor(Math.random() * ROWS),
+    targetRow: Math.floor(1 + Math.random() * (ROWS - 2)),
     targetCol: AISLE_COLS[Math.floor(Math.random() * AISLE_COLS.length)],
     path: [],
   }
 }
 
 function moveAMR(amr: AMR): AMR {
-  let { row, col, targetRow, targetCol, path, totalDist, battery, status, completedTasks, taskId } = amr
+  let { row, col, targetRow, targetCol, path, totalDist, battery, status } = amr
 
-  // drain battery
   battery = Math.max(0, battery - 0.12)
 
-  // low battery → go charge
   if (battery < 12 && status !== "CHARGING") {
     return {
       ...amr, battery, status: "CHARGING", taskId: null,
@@ -111,71 +112,44 @@ function moveAMR(amr: AMR): AMR {
     return { ...amr, battery }
   }
 
-  // assign new random target if idle
   if (status === "IDLE") {
     const newTargetRow = Math.floor(1 + Math.random() * (ROWS - 2))
     const newTargetCol = AISLE_COLS[Math.floor(Math.random() * AISLE_COLS.length)]
     return { ...amr, battery, status: "EN_ROUTE", targetRow: newTargetRow, targetCol: newTargetCol }
   }
 
-  // movement logic — always stay in aisles
   let newRow = row
   let newCol = col
-
   const inAisleCol = AISLE_COLS.includes(col)
   const inAisleRow = AISLE_ROWS.includes(row)
 
   if (!inAisleCol && !inAisleRow) {
-    // not in aisle — move to nearest aisle column first
     const nearestAisleCol = AISLE_COLS.reduce((a, b) =>
-      Math.abs(a - col) < Math.abs(b - col) ? a : b
-    )
+      Math.abs(a - col) < Math.abs(b - col) ? a : b)
     newCol = col + (nearestAisleCol > col ? 1 : -1)
   } else if (inAisleCol && row !== targetRow) {
-    // in aisle column — move vertically toward target row
     newRow = row + (targetRow > row ? 1 : -1)
   } else if (row === targetRow && col !== targetCol) {
-    // at correct row — move horizontally toward target col
-    // but only if we're in an aisle row or target col is an aisle
     if (inAisleRow || AISLE_COLS.includes(targetCol)) {
       newCol = col + (targetCol > col ? 1 : -1)
     } else {
-      // move to an aisle row first
       const nearestAisleRow = AISLE_ROWS.reduce((a, b) =>
-        Math.abs(a - row) < Math.abs(b - row) ? a : b
-      )
+        Math.abs(a - row) < Math.abs(b - row) ? a : b)
       newRow = row + (nearestAisleRow > row ? 1 : -1)
     }
   }
 
-  // clamp to grid
   newRow = Math.max(0, Math.min(ROWS - 1, newRow))
   newCol = Math.max(0, Math.min(COLS - 1, newCol))
-
   totalDist += 1
   const newPath = [...path, { row: newRow, col: newCol }].slice(-6)
-
-  // arrived at target
-  if (newRow === targetRow && newCol === targetCol) {
-    if (Math.random() < 0.3) {
-      // complete task and pick new target
-      const newTarget = {
-        targetRow: Math.floor(1 + Math.random() * (ROWS - 2)),
-        targetCol: AISLE_COLS[Math.floor(Math.random() * AISLE_COLS.length)],
-      }
-      if (taskId) {
-        completedTasks += 1
-        return { ...amr, battery, status: "IDLE", taskId: null, row: newRow, col: newCol, totalDist, path: newPath, completedTasks, ...newTarget }
-      }
-      return { ...amr, battery, status: "EN_ROUTE", row: newRow, col: newCol, totalDist, path: newPath, ...newTarget }
-    }
-  }
 
   return { ...amr, battery, row: newRow, col: newCol, totalDist, path: newPath }
 }
 
 export default function RMSPage() {
-  const { tasks, completeTask, addLog } = useStore()
+  const store = useStore()
+  const { tasks, completeTask, addLog } = store
   const [amrs, setAmrs] = useState<AMR[]>(() => Array.from({ length: 4 }, (_, i) => spawnAMR(i)))
   const [running, setRunning] = useState(false)
   const [fleetSize, setFleetSize] = useState(4)
@@ -188,22 +162,19 @@ export default function RMSPage() {
     setAmrs(Array.from({ length: fleetSize }, (_, i) => spawnAMR(i)))
   }, [fleetSize])
 
-  // ── SIMULATION TICK ──
   useEffect(() => {
     if (!running) {
       if (tickRef.current) clearInterval(tickRef.current)
       return
     }
+
     tickRef.current = setInterval(() => {
+      const state = useStore.getState()
+      const currentTasks: Task[] = state.tasks
 
-      // Step 1: auto-process WMS→WCS→RMS pipeline
-      const storeTasks = useStore.getState().tasks
-      const storeCompleteTask = useStore.getState().completeTask
-      const storeAddLog = useStore.getState().addLog
-
-      // Auto WCS: move WMS_QUEUED → WCS_DISPATCHED
-      const needsWCS = storeTasks.filter((t: Task) => t.status === "WMS_QUEUED")
-      if (needsWCS.length > 0) {
+      // ── STEP 1: Auto WCS — move WMS_QUEUED → WCS_DISPATCHED ──
+      const hasQueued = currentTasks.some(t => t.status === "WMS_QUEUED")
+      if (hasQueued) {
         useStore.setState(s => ({
           tasks: s.tasks.map((t: Task) =>
             t.status === "WMS_QUEUED"
@@ -213,14 +184,18 @@ export default function RMSPage() {
         }))
       }
 
-      // Step 2: assign WCS_DISPATCHED tasks to idle AMRs
+      // ── STEP 2: Assign WCS_DISPATCHED → idle AMRs ──
       setAmrs(prev => {
-        const currentTasks = useStore.getState().tasks
-        const dispatched = currentTasks.filter((t: Task) => t.status === "WCS_DISPATCHED")
+        const freshTasks: Task[] = useStore.getState().tasks
+        const dispatched = freshTasks.filter(t => t.status === "WCS_DISPATCHED")
+        if (!dispatched.length) return prev
+
+        const idleAmrs = prev.filter(a => a.status === "IDLE" && a.battery > 12)
+        if (!idleAmrs.length) return prev
+
         const taskUpdates: Record<string, Task> = {}
         const amrUpdates: Record<string, Partial<AMR>> = {}
         const usedAmrs = new Set<string>()
-        const idleAmrs = prev.filter(a => a.status === "IDLE" && a.battery > 12)
 
         for (const task of dispatched) {
           const available = idleAmrs.filter(a => !usedAmrs.has(a.id))
@@ -229,58 +204,53 @@ export default function RMSPage() {
           usedAmrs.add(amr.id)
           taskUpdates[task.id] = { ...task, status: "ASSIGNED", assignedTo: amr.id }
           amrUpdates[amr.id] = { status: "EN_ROUTE", taskId: task.id }
-          storeAddLog(`RMS → ${task.id} ⟶ ${amr.id}`, "#e040fb", "RMS")
+          state.addLog(`RMS → ${task.id} ⟶ ${amr.id} [${task.priority}]`, "#e040fb", "RMS")
         }
 
         if (Object.keys(taskUpdates).length > 0) {
           useStore.setState(s => ({
-            tasks: s.tasks.map((t: Task) => taskUpdates[t.id] || t)
+            tasks: s.tasks.map((t: Task) => taskUpdates[t.id] ? taskUpdates[t.id] : t)
           }))
         }
 
         return prev.map(a => amrUpdates[a.id] ? { ...a, ...amrUpdates[a.id] } : a)
       })
 
-      // Step 3: move AMRs and complete tasks
+      // ── STEP 3: Move AMRs + complete tasks ──
       setAmrs(prev => prev.map((amr: AMR) => {
         const moved = moveAMR(amr)
 
-        // randomly complete assigned tasks as robot moves
+        // complete task with 6% chance each tick while en route
         if (amr.taskId && amr.status === "EN_ROUTE" && Math.random() < 0.06) {
-          storeCompleteTask(amr.taskId)
-          storeAddLog(`✓ ${amr.id} completed ${amr.taskId}`, "#10b981", "AMR")
-          return { ...moved, status: "IDLE", taskId: null, completedTasks: amr.completedTasks + 1 }
+          useStore.getState().completeTask(amr.taskId)
+          useStore.getState().addLog(`✓ ${amr.id} completed ${amr.taskId}`, "#10b981", "AMR")
+          return {
+            ...moved,
+            status: "IDLE",
+            taskId: null,
+            completedTasks: amr.completedTasks + 1,
+            targetRow: Math.floor(1 + Math.random() * (ROWS - 2)),
+            targetCol: AISLE_COLS[Math.floor(Math.random() * AISLE_COLS.length)],
+          }
         }
 
-        if (moved.completedTasks > amr.completedTasks && amr.taskId) {
-          storeCompleteTask(amr.taskId)
-        }
         return moved
       }))
 
-    }, 400)
-    return () => { if (tickRef.current) clearInterval(tickRef.current) }
-  }, [running, completeTask, addLog])
-        const moved = moveAMR(amr)
-        if (moved.completedTasks > amr.completedTasks) {
-          if (amr.taskId) completeTask(amr.taskId)
-          addLog(`✓ ${amr.id} task complete`, "#10b981", "AMR")
-        }
-        if (moved.status === "CHARGING" && amr.status !== "CHARGING") {
-          addLog(`⚡ ${amr.id} → charging`, "#8b5cf6", "RMS")
-        }
-        return moved
-      }))
-    }, 400)
-    return () => { if (tickRef.current) clearInterval(tickRef.current) }
-  }, [running, completeTask, addLog])
+    }, 500)
 
+    return () => { if (tickRef.current) clearInterval(tickRef.current) }
+  }, [running])
+
+  const typedTasks = tasks as Task[]
   const stats = {
-    idle:     amrs.filter(a => a.status === "IDLE").length,
-    active:   amrs.filter(a => a.status === "EN_ROUTE" || a.status === "WORKING").length,
-    charging: amrs.filter(a => a.status === "CHARGING").length,
-    avgBatt:  Math.round(amrs.reduce((s, a) => s + a.battery, 0) / Math.max(1, amrs.length)),
+    idle:      amrs.filter(a => a.status === "IDLE").length,
+    active:    amrs.filter(a => a.status === "EN_ROUTE" || a.status === "WORKING").length,
+    charging:  amrs.filter(a => a.status === "CHARGING").length,
+    avgBatt:   Math.round(amrs.reduce((s, a) => s + a.battery, 0) / Math.max(1, amrs.length)),
     completed: amrs.reduce((s, a) => s + a.completedTasks, 0),
+    tasksDone: typedTasks.filter(t => t.status === "DONE").length,
+    tasksLeft: typedTasks.filter(t => t.status !== "DONE").length,
   }
 
   const CS = Math.max(20, Math.floor(34 * zoom))
@@ -288,7 +258,7 @@ export default function RMSPage() {
   return (
     <div style={{ background: "#060a12", minHeight: "100vh", color: "#fff", display: "flex", flexDirection: "column" }}>
 
-      {/* Top bar */}
+      {/* ── TOP BAR ── */}
       <div style={{
         background: "#0a0f1e", borderBottom: "1px solid rgba(255,255,255,0.08)",
         padding: "12px 20px", display: "flex", justifyContent: "space-between",
@@ -303,35 +273,33 @@ export default function RMSPage() {
           </h1>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={() => setZoom(z => Math.max(0.5, +(z - 0.15).toFixed(2)))} style={{ width: 28, height: 28, borderRadius: 5, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+          <button onClick={() => setZoom(z => Math.max(0.5, +(z - 0.15).toFixed(2)))} style={{ width: 28, height: 28, borderRadius: 5, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: 16 }}>−</button>
           <span style={{ fontFamily: "'Courier New',monospace", fontSize: 10, color: "rgba(255,255,255,0.4)", width: 36, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))} style={{ width: 28, height: 28, borderRadius: 5, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+          <button onClick={() => setZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))} style={{ width: 28, height: 28, borderRadius: 5, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer", fontSize: 16 }}>+</button>
           <div style={{ width: 8, height: 8, borderRadius: "50%", marginLeft: 8, background: running ? "#10b981" : "#ef4444", boxShadow: running ? "0 0 8px #10b981" : "none" }}/>
           <button onClick={() => setRunning(r => !r)} style={{
             padding: "8px 20px",
             background: running ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)",
             border: `1px solid ${running ? "#ef4444" : "#10b981"}`,
             borderRadius: 7, color: running ? "#ef4444" : "#10b981",
-            fontFamily: "'Courier New',monospace", fontSize: 11, letterSpacing: 1, cursor: "pointer", fontWeight: 700,
+            fontFamily: "'Courier New',monospace", fontSize: 11, letterSpacing: 1,
+            cursor: "pointer", fontWeight: 700,
           }}>
             {running ? "⏸ PAUSE" : "▶ RUN SIM"}
           </button>
         </div>
       </div>
 
-      {/* KPI strip */}
-      <div style={{
-        display: "flex", flexShrink: 0,
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        overflowX: "auto",
-      }}>
+      {/* ── KPI STRIP ── */}
+      <div style={{ display: "flex", flexShrink: 0, borderBottom: "1px solid rgba(255,255,255,0.06)", overflowX: "auto" }}>
         {[
           { label: "IDLE",      value: stats.idle,      color: "#10b981" },
           { label: "ACTIVE",    value: stats.active,    color: "#3b82f6" },
           { label: "CHARGING",  value: stats.charging,  color: "#8b5cf6" },
           { label: "AVG BATT",  value: `${stats.avgBatt}%`, color: stats.avgBatt > 40 ? "#10b981" : "#ef4444" },
           { label: "COMPLETED", value: stats.completed, color: "#10b981" },
-          { label: "TASKS",     value: (tasks as Task[]).filter(t => t.status !== "DONE").length, color: "#f59e0b" },
+          { label: "DONE",      value: stats.tasksDone, color: "#10b981" },
+          { label: "REMAINING", value: stats.tasksLeft, color: "#f59e0b" },
         ].map(k => (
           <div key={k.label} style={{
             background: "#0a0f1e", padding: "10px 20px",
@@ -343,7 +311,7 @@ export default function RMSPage() {
         ))}
       </div>
 
-      {/* Main content */}
+      {/* ── MAIN CONTENT ── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
         {/* ── WAREHOUSE MAP ── */}
@@ -356,9 +324,10 @@ export default function RMSPage() {
               { color: "#080e1a", border: "#0f1e36", label: "Aisle" },
               { color: "#150a2a", border: "#6d28d9", label: "Charge" },
               { color: "#1a0e00", border: "#92400e", label: "Dock" },
+              { color: "#eab308", border: "#eab308", label: "Active Task" },
             ].map(l => (
               <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <div style={{ width: 10, height: 10, background: l.color, border: `1px solid ${l.border}`, borderRadius: 2, flexShrink: 0 }}/>
+                <div style={{ width: 10, height: 10, background: l.color, border: `1px solid ${l.border}`, borderRadius: 2 }}/>
                 <span style={{ fontFamily: "'Courier New',monospace", fontSize: 9, color: "rgba(255,255,255,0.35)" }}>{l.label}</span>
               </div>
             ))}
@@ -392,8 +361,6 @@ export default function RMSPage() {
             {/* Rows */}
             {Array.from({ length: ROWS }, (_, r) => (
               <div key={r} style={{ display: "flex", alignItems: "center" }}>
-
-                {/* Row label */}
                 <div style={{
                   width: CS, textAlign: "right", paddingRight: 4, flexShrink: 0,
                   fontFamily: "'Courier New',monospace",
@@ -403,12 +370,11 @@ export default function RMSPage() {
                   {SHELF_ROWS[r] || ""}
                 </div>
 
-                {/* Cells */}
                 {Array.from({ length: COLS }, (_, c) => {
                   const cellType = getCellType(r, c)
                   const amr = amrs.find(a => a.row === r && a.col === c)
                   const isPath = !amr && amrs.some(a => a.path.some(p => p.row === r && p.col === c))
-                  const hasTask = (tasks as Task[]).some(t =>
+                  const hasTask = typedTasks.some(t =>
                     (t.status === "ASSIGNED" || t.status === "WCS_DISPATCHED") &&
                     t.from && t.from[0] === r && t.from[1] === c
                   )
@@ -416,28 +382,28 @@ export default function RMSPage() {
                   let bg = "#080d14"
                   let borderColor = "rgba(255,255,255,0.03)"
 
-                  if (cellType === "shelf")   { bg = "#0d1a2e"; borderColor = "#162d52" }
-                  if (cellType === "aisle")   { bg = "#060c18"; borderColor = "#0a1428" }
-                  if (cellType === "charge")  { bg = "#120820"; borderColor = "#5b21b6" }
-                  if (cellType === "dock")    { bg = "#150a00"; borderColor = "#78350f" }
-                  if (isPath)                  { bg = "#0a1428"; borderColor = "#1d4ed840" }
-                  if (hasTask && !amr)         { borderColor = "#eab308" }
-                  if (amr)                     { bg = `${amr.color}20`; borderColor = amr.color }
+                  if (cellType === "shelf")  { bg = "#0d1a2e"; borderColor = "#162d52" }
+                  if (cellType === "aisle")  { bg = "#060c18"; borderColor = "#0a1428" }
+                  if (cellType === "charge") { bg = "#120820"; borderColor = "#5b21b6" }
+                  if (cellType === "dock")   { bg = "#150a00"; borderColor = "#78350f" }
+                  if (isPath)                { bg = "#0a1428"; borderColor = "#1d4ed840" }
+                  if (hasTask && !amr)       { borderColor = "#eab308" }
+                  if (amr)                   { bg = `${amr.color}20`; borderColor = amr.color }
 
                   return (
-                    <div key={c} style={{
-                      width: CS, height: CS, flexShrink: 0,
-                      background: bg,
-                      border: `1px solid ${borderColor}`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      position: "relative",
-                      boxShadow: amr ? `0 0 10px ${amr.color}80` : "none",
-                      transition: "box-shadow 0.15s",
-                      cursor: amr ? "pointer" : "default",
-                    }}
+                    <div key={c}
                       onClick={() => amr && setSelectedAmr(selectedAmr === amr.id ? null : amr.id)}
                       title={`[${SHELF_ROWS[r]||r}, ${SHELF_COLS[c]||c}] ${cellType}${amr ? ` — ${amr.id}` : ""}`}
-                    >
+                      style={{
+                        width: CS, height: CS, flexShrink: 0,
+                        background: bg,
+                        border: `1px solid ${borderColor}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        position: "relative",
+                        boxShadow: amr ? `0 0 10px ${amr.color}80` : "none",
+                        transition: "box-shadow 0.15s",
+                        cursor: amr ? "pointer" : "default",
+                      }}>
                       {amr ? (
                         <RobotIcon color={amr.color} size={Math.max(10, CS * 0.65)}/>
                       ) : cellType === "shelf" ? (
@@ -453,7 +419,6 @@ export default function RMSPage() {
                         <span style={{ fontSize: Math.max(8, CS * 0.32), color: "#b45309" }}>▼</span>
                       ) : null}
 
-                      {/* Task dot */}
                       {hasTask && !amr && (
                         <div style={{
                           position: "absolute", top: 2, right: 2,
@@ -462,14 +427,8 @@ export default function RMSPage() {
                           boxShadow: "0 0 4px #eab308",
                         }}/>
                       )}
-
-                      {/* Path trail */}
                       {isPath && (
-                        <div style={{
-                          position: "absolute", inset: 0,
-                          background: "rgba(59,130,246,0.08)",
-                          pointerEvents: "none",
-                        }}/>
+                        <div style={{ position: "absolute", inset: 0, background: "rgba(59,130,246,0.08)", pointerEvents: "none" }}/>
                       )}
                     </div>
                   )
@@ -512,6 +471,7 @@ export default function RMSPage() {
               const statusColor = sc[amr.status] || "#fff"
               const battColor = amr.battery > 50 ? "#10b981" : amr.battery > 20 ? "#f59e0b" : "#ef4444"
               const isSelected = selectedAmr === amr.id
+              const activeTask = typedTasks.find(t => t.id === amr.taskId)
 
               return (
                 <div key={amr.id}
@@ -546,7 +506,7 @@ export default function RMSPage() {
                     </span>
                   </div>
 
-                  {/* Battery bar */}
+                  {/* Battery */}
                   <div style={{ marginBottom: 7 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
                       <span style={{ fontFamily: "'Courier New',monospace", fontSize: 7, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>BATTERY</span>
@@ -570,32 +530,61 @@ export default function RMSPage() {
                       </div>
                     ))}
                   </div>
+
+                  {activeTask && (
+                    <div style={{ marginTop: 8, background: `${amr.color}10`, border: `1px solid ${amr.color}25`, borderRadius: 5, padding: "5px 8px" }}>
+                      <div style={{ fontFamily: "'Courier New',monospace", fontSize: 7, color: amr.color, letterSpacing: 1, marginBottom: 1 }}>ACTIVE TASK</div>
+                      <div style={{ fontFamily: "monospace", fontSize: 10, color: "rgba(255,255,255,0.6)" }}>{activeTask.id} · {activeTask.type} · {activeTask.sku}</div>
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
 
           {/* Task queue */}
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "10px 12px", maxHeight: 200, overflowY: "auto" }}>
-            <div style={{ fontFamily: "'Courier New',monospace", fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Task Queue</div>
-            {(tasks as Task[]).length === 0 && (
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "10px 12px", maxHeight: 220, overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontFamily: "'Courier New',monospace", fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase" }}>Task Queue</div>
+              <div style={{ fontFamily: "'Courier New',monospace", fontSize: 8, color: "#10b981" }}>
+                {stats.tasksDone} / {typedTasks.length} done
+              </div>
+            </div>
+            {typedTasks.length === 0 && (
               <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 10, fontStyle: "italic", padding: "10px 0", textAlign: "center" }}>
                 Go to WMS → inject orders
               </div>
             )}
-            {[...(tasks as Task[])].reverse().slice(0, 12).map(t => {
-              const sc: Record<string,string> = { WMS_QUEUED:"#3b82f6", WCS_DISPATCHED:"#f59e0b", ASSIGNED:"#8b5cf6", DONE:"#10b981" }
+            {[...typedTasks].reverse().slice(0, 15).map(t => {
+              const sc: Record<string,string> = {
+                WMS_QUEUED: "#3b82f6",
+                WCS_DISPATCHED: "#f59e0b",
+                ASSIGNED: "#8b5cf6",
+                DONE: "#10b981"
+              }
               const color = sc[t.status] || "#fff"
               return (
                 <div key={t.id} style={{
                   display: "flex", gap: 5, alignItems: "center",
                   padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.03)",
                   flexWrap: "wrap",
+                  opacity: t.status === "DONE" ? 0.5 : 1,
                 }}>
                   <span style={{ fontFamily: "'Courier New',monospace", fontSize: 8, color: "rgba(255,255,255,0.3)" }}>{t.id}</span>
                   <span style={{ fontFamily: "monospace", fontSize: 10, color: "#fff", flex: 1 }}>{t.type}</span>
-                  <span style={{ background: `${PRI_COL[t.priority]}18`, border: `1px solid ${PRI_COL[t.priority]}40`, borderRadius: 3, padding: "0 4px", fontFamily: "'Courier New',monospace", fontSize: 7, color: PRI_COL[t.priority] }}>{t.priority}</span>
-                  <span style={{ background: `${color}18`, border: `1px solid ${color}40`, borderRadius: 3, padding: "0 4px", fontFamily: "'Courier New',monospace", fontSize: 7, color }}>{t.status.replace(/_/g," ")}</span>
+                  <span style={{
+                    background: `${PRI_COL[t.priority]}18`,
+                    border: `1px solid ${PRI_COL[t.priority]}40`,
+                    borderRadius: 3, padding: "0 4px",
+                    fontFamily: "'Courier New',monospace", fontSize: 7,
+                    color: PRI_COL[t.priority],
+                  }}>{t.priority}</span>
+                  <span style={{
+                    background: `${color}18`,
+                    border: `1px solid ${color}40`,
+                    borderRadius: 3, padding: "0 4px",
+                    fontFamily: "'Courier New',monospace", fontSize: 7, color,
+                  }}>{t.status.replace(/_/g," ")}</span>
                 </div>
               )
             })}
