@@ -10,6 +10,7 @@ export default function NavBar() {
     { href: "/wms", label: "WMS"      },
     { href: "/wcs", label: "WCS / WES"},
     { href: "/rms", label: "RMS + Map"},
+    { href: "/station", label: "Stations" },
   ]
 
   return (
