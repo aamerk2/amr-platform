@@ -175,7 +175,7 @@ export default function RMSPage() {
       // ── STEP 1: Auto WCS — move WMS_QUEUED → WCS_DISPATCHED ──
       const hasQueued = currentTasks.some(t => t.status === "WMS_QUEUED")
       if (hasQueued) {
-        useStore.setState(s => ({
+        useStore.setState((s: { tasks: Task[] }) => ({
           tasks: s.tasks.map((t: Task) =>
             t.status === "WMS_QUEUED"
               ? { ...t, status: "WCS_DISPATCHED", wcsProcessed: true, wcsRule: "Auto Route" }
@@ -208,7 +208,7 @@ export default function RMSPage() {
         }
 
         if (Object.keys(taskUpdates).length > 0) {
-          useStore.setState(s => ({
+          useStore.setState((s: { tasks: Task[] }) => ({
             tasks: s.tasks.map((t: Task) => taskUpdates[t.id] ? taskUpdates[t.id] : t)
           }))
         }
