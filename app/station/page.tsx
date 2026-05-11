@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { useStore } from "@/lib/store"
+import { useCrossTabSync } from "@/lib/sync"
 
 const SKUS = [
   "SKU-1042","SKU-2381","SKU-4917","SKU-3205","SKU-8834",
@@ -82,6 +83,7 @@ const AMR_COLORS: Record<string,string> = {
 
 export default function StationPage() {
   const { stations, tasks, amrs, loginStation, logoutStation, confirmPickComplete, addLog, updateStationProgress } = useStore()
+  useCrossTabSync()
   const [activeStationId, setActiveStationId] = useState("S1")
   const [rackData, setRackData] = useState<Record<string, RackLevel[]>>({})
   const [wallData, setWallData] = useState<Record<string, WallSlot[]>>({})

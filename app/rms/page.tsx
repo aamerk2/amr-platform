@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { useStore } from "@/lib/store"
+import { useCrossTabSync } from "@/lib/sync"
 
 const COLS = 24
 const ROWS = 20
@@ -356,6 +357,7 @@ function WarehouseMap({ amrs, tasks, stations, zoom }: {
 
 export default function RMSPage() {
   const { tasks, amrs, stations, logs, automationTick, setFleetSize } = useStore()
+  useCrossTabSync()
   const [running, setRunning] = useState(false)
   const [zoom, setZoom] = useState(0.9)
   const [fleetSize, setFleetSizeLocal] = useState(4)
