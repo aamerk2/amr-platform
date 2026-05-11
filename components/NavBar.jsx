@@ -15,43 +15,67 @@ export default function NavBar() {
 
   return (
     <nav style={{
-      background: "rgba(5,9,17,0.97)",
-      borderBottom: "1px solid rgba(255,255,255,0.07)",
+      background: "#ffffff",
+      borderBottom: "1px solid #e2e8f0",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
       padding: "0 28px",
       display: "flex",
       alignItems: "center",
-      gap: 0,
       position: "sticky",
       top: 0,
       zIndex: 200,
+      height: 60,
     }}>
+      {/* Logo */}
       <div
         onClick={() => router.push("/")}
         style={{
-          paddingRight: 28, marginRight: 28,
-          borderRight: "1px solid rgba(255,255,255,0.07)",
-          flexShrink: 0, cursor: "pointer",
+          paddingRight: 28,
+          marginRight: 28,
+          borderRight: "1px solid #e2e8f0",
+          flexShrink: 0,
+          cursor: "pointer",
         }}
       >
-        <div style={{ fontFamily: "'Courier New', monospace", fontSize: 9, color: "#00e5ff", letterSpacing: 3, textTransform: "uppercase" }}>
+        <div style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 9,
+          color: "#6366f1",
+          letterSpacing: 3,
+          textTransform: "uppercase",
+          marginBottom: 2,
+        }}>
           MyRoboCloud
         </div>
-        <div style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: -0.5 }}>
+        <div style={{
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 15,
+          fontWeight: 700,
+          color: "#0f172a",
+          letterSpacing: -0.3,
+        }}>
           Warehouse Platform
         </div>
       </div>
+
+      {/* Nav links */}
       {links.map(l => (
         <button
           key={l.href}
           onClick={() => router.push(l.href)}
           style={{
-            background: "none", border: "none",
-            borderBottom: `2px solid ${path === l.href ? "#00e5ff" : "transparent"}`,
-            color: path === l.href ? "#00e5ff" : "rgba(255,255,255,0.4)",
-            fontFamily: "'Courier New', monospace", fontSize: 11,
-            letterSpacing: 1.5, textTransform: "uppercase",
-            padding: "20px 16px", transition: "all 0.2s",
-            whiteSpace: "nowrap", cursor: "pointer",
+            background: path === l.href ? "#f5f3ff" : "none",
+            border: "none",
+            borderRadius: 8,
+            color: path === l.href ? "#6366f1" : "#64748b",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 13,
+            fontWeight: path === l.href ? 600 : 400,
+            letterSpacing: 0.1,
+            padding: "7px 14px",
+            cursor: "pointer",
+            transition: "all 0.15s",
+            marginRight: 2,
           }}
         >
           {l.label}
