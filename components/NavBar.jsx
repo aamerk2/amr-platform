@@ -1,86 +1,162 @@
 "use client"
 import { useRouter, usePathname } from "next/navigation"
+import { useState } from "react"
+
+const NAV_ITEMS = [
+  { href: "/",        icon: "⊞", label: "Dashboard"  },
+  { href: "/wms",     icon: "📋", label: "WMS"        },
+  { href: "/wcs",     icon: "⚙️",  label: "WCS / WES"  },
+  { href: "/rms",     icon: "🗺️",  label: "RMS + Map"  },
+  { href: "/station", icon: "🏭", label: "Stations"   },
+]
 
 export default function NavBar() {
-  const router = useRouter()
-  const path = usePathname()
-
-  const links = [
-    { href: "/",        label: "Overview"  },
-    { href: "/wms",     label: "WMS"       },
-    { href: "/wcs",     label: "WCS / WES" },
-    { href: "/rms",     label: "RMS + Map" },
-    { href: "/station", label: "Stations"  },
-  ]
+  const router   = useRouter()
+  const path     = usePathname()
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <nav style={{
+    <div style={{
+      width: collapsed ? 64 : 220,
+      minHeight: "100vh",
       background: "#ffffff",
-      borderBottom: "1px solid #e2e8f0",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-      padding: "0 28px",
+      borderRight: "1px solid #f1f5f9",
       display: "flex",
-      alignItems: "center",
-      position: "sticky",
-      top: 0,
+      flexDirection: "column",
+      position: "fixed",
+      top: 0, left: 0, bottom: 0,
       zIndex: 200,
-      height: 60,
+      transition: "width 0.2s ease",
+      flexShrink: 0,
     }}>
+
       {/* Logo */}
-      <div
-        onClick={() => router.push("/")}
-        style={{
-          paddingRight: 28,
-          marginRight: 28,
-          borderRight: "1px solid #e2e8f0",
-          flexShrink: 0,
-          cursor: "pointer",
-        }}
-      >
-        <div style={{
-          fontFamily: "'DM Mono', monospace",
-          fontSize: 9,
-          color: "#6366f1",
-          letterSpacing: 3,
-          textTransform: "uppercase",
-          marginBottom: 2,
-        }}>
-          MyRoboCloud
-        </div>
-        <div style={{
-          fontFamily: "'DM Sans', sans-serif",
-          fontSize: 15,
-          fontWeight: 700,
-          color: "#0f172a",
-          letterSpacing: -0.3,
-        }}>
-          Warehouse Platform
-        </div>
+      <div style={{
+        padding: collapsed ? "20px 0" : "20px 20px",
+        borderBottom: "1px solid #f1f5f9",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: collapsed ? "center" : "space-between",
+        height: 64,
+      }}>
+        {!collapsed && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => router.push("/")}>
+            <div style={{
+              width: 32, height: 32,
+              background: "#f97316",
+              borderRadius: 8,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fff", fontSize: 16, fontWeight: 700,
+            }}>R</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>MyRoboCloud</div>
+              <div style={{ fontSize: 10, color: "#94a3b8" }}>Warehouse Platform</div>
+            </div>
+          </div>
+        )}
+        {collapsed && (
+          <div style={{
+            width: 32, height: 32,
+            background: "#f97316",
+            borderRadius: 8,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", fontSize: 16, fontWeight: 700,
+            cursor: "pointer",
+          }} onClick={() => router.push("/")}>R</div>
+        )}
+        {!collapsed && (
+          <button onClick={() => setCollapsed(true)} style={{
+            background: "none", border: "none",
+            color: "#94a3b8", cursor: "pointer", fontSize: 16,
+            padding: 4, borderRadius: 4,
+          }}>←</button>
+        )}
       </div>
 
-      {/* Nav links */}
-      {links.map(l => (
-        <button
-          key={l.href}
-          onClick={() => router.push(l.href)}
-          style={{
-            background: path === l.href ? "#f5f3ff" : "none",
-            border: "none",
-            borderRadius: 8,
-            color: path === l.href ? "#6366f1" : "#64748b",
-            fontFamily: "'DM Sans', sans-serif",
-            fontSize: 13,
-            fontWeight: path === l.href ? 600 : 400,
-            letterSpacing: 0.1,
-            padding: "7px 14px",
+      {/* Expand button when collapsed */}
+      {collapsed && (
+        <button onClick={() => setCollapsed(false)} style={{
+          background: "none", border: "none",
+          color: "#94a3b8", cursor: "pointer",
+          fontSize: 14, padding: "8px 0",
+          textAlign: "center",
+        }}>→</button>
+      )}
+
+      {/* Add New button */}
+      {!collapsed && (
+        <div style={{ padding: "16px 16px 8px" }}>
+          <button style={{
+            width: "100%", padding: "10px 14px",
+            background: "#f97316",
+            border: "none", borderRadius: 10,
+            color: "#ffffff",
+            fontSize: 13, fontWeight: 600,
             cursor: "pointer",
-            transition: "all 0.15s",
-            marginRight: 2,
-          }}
-        >
-          {l.label}
-        </button>
-      ))}
-    </nav>
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span style={{ fontSize: 16 }}>+</span>
+            Add New Item
+          </button>
+        </div>
+      )}
+      {collapsed && <div style={{ height: 8 }}/>}
+
+      {/* Nav items */}
+      <nav style={{ flex: 1, padding: collapsed ? "8px 8px" : "8px 12px", display: "flex", flexDirection: "column", gap: 2 }}>
+        {NAV_ITEMS.map(item => {
+          const active = path === item.href
+          return (
+            <button
+              key={item.href}
+              onClick={() => router.push(item.href)}
+              title={collapsed ? item.label : undefined}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: collapsed ? 0 : 10,
+                justifyContent: collapsed ? "center" : "flex-start",
+                padding: collapsed ? "10px 0" : "10px 12px",
+                background: active ? "#fff7ed" : "transparent",
+                border: "none",
+                borderRadius: 10,
+                color: active ? "#f97316" : "#64748b",
+                fontSize: active ? 13 : 13,
+                fontWeight: active ? 600 : 400,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                textAlign: "left",
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
+              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && active && (
+                <div style={{ marginLeft: "auto", width: 6, height: 6, borderRadius: "50%", background: "#f97316" }}/>
+              )}
+            </button>
+          )
+        })}
+      </nav>
+
+      {/* Bottom section */}
+      {!collapsed && (
+        <div style={{ padding: "12px 16px", borderTop: "1px solid #f1f5f9" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%",
+              background: "#f97316",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fff", fontSize: 12, fontWeight: 700,
+            }}>JK</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>Jawwad Khan</div>
+              <div style={{ fontSize: 10, color: "#94a3b8" }}>Admin</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
