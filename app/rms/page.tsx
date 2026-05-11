@@ -367,9 +367,11 @@ export default function RMSPage() {
 
   useEffect(() => {
     if (!running) { if (tickRef.current) clearInterval(tickRef.current); return }
-    tickRef.current = setInterval(() => automationTick(), 400)
+    tickRef.current = setInterval(() => {
+      useStore.getState().automationTick()
+    }, 400)
     return () => { if (tickRef.current) clearInterval(tickRef.current) }
-  }, [running, automationTick])
+  }, [running])
 
   const stats = {
     idle:          typedAmrs.filter(a => a.phase==="IDLE").length,
